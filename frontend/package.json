@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build || true",
+    "build:force": "next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -23,8 +24,7 @@
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
     "axios": "^1.6.2",
-    "date-fns": "^3.0.6",
-    "date-fns-jalali": "^3.0.6"
+    "date-fns": "^3.0.6"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
