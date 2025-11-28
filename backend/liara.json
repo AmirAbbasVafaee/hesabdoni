@@ -1,0 +1,13 @@
+{
+  "platform": "node",
+  "build": {
+    "commands": [
+      "npm install",
+      "npm run build"
+    ]
+  },
+  "start": {
+    "command": "npm start"
+  }
+}
+

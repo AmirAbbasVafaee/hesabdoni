@@ -28,11 +28,23 @@ export default function LoginPage() {
       const response = await api.post('/auth/login', { username, password })
       localStorage.setItem('token', response.data.token)
       localStorage.setItem('user', JSON.stringify(response.data.user))
-      toast({
-        title: 'ورود موفق',
-        description: 'با موفقیت وارد شدید',
-      })
-      router.push('/dashboard')
+      
+      // Check if admin and redirect accordingly
+      if (response.data.user.isAdmin) {
+        localStorage.setItem('isAdmin', 'true')
+        toast({
+          title: 'ورود موفق',
+          description: 'با موفقیت وارد پنل مدیریت شدید',
+        })
+        router.push('/admin/companies')
+      } else {
+        localStorage.removeItem('isAdmin')
+        toast({
+          title: 'ورود موفق',
+          description: 'با موفقیت وارد شدید',
+        })
+        router.push('/dashboard')
+      }
     } catch (error: any) {
       toast({
         title: 'خطا در ورود',

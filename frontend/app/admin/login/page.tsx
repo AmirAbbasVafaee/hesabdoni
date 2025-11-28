@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/components/ui/use-toast'
+import api from '@/lib/api'
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState('')
@@ -21,24 +22,36 @@ export default function AdminLoginPage() {
     e.preventDefault()
     setLoading(true)
 
-    // TODO: Implement admin authentication
-    // For now, simple check (in production, use proper admin auth)
-    if (username === 'admin' && password === 'admin') {
-      localStorage.setItem('adminToken', 'admin-token')
-      localStorage.setItem('isAdmin', 'true')
-      toast({
-        title: 'ورود موفق',
-        description: 'با موفقیت وارد پنل مدیریت شدید',
-      })
-      router.push('/admin/companies')
-    } else {
+    try {
+      const response = await api.post('/auth/login', { username, password })
+      localStorage.setItem('token', response.data.token)
+      localStorage.setItem('user', JSON.stringify(response.data.user))
+      
+      // Check if admin based on response
+      if (response.data.user.isAdmin) {
+        localStorage.setItem('isAdmin', 'true')
+        toast({
+          title: 'ورود موفق',
+          description: 'با موفقیت وارد پنل مدیریت شدید',
+        })
+        router.push('/admin/companies')
+      } else {
+        localStorage.removeItem('isAdmin')
+        toast({
+          title: 'خطا در ورود',
+          description: 'این حساب کاربری دسترسی مدیریت ندارد',
+          variant: 'destructive',
+        })
+      }
+    } catch (error: any) {
       toast({
         title: 'خطا در ورود',
-        description: 'نام کاربری یا رمز عبور اشتباه است',
+        description: error.response?.data?.error || 'نام کاربری یا رمز عبور اشتباه است',
         variant: 'destructive',
       })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
