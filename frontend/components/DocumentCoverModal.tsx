@@ -49,12 +49,30 @@ export function DocumentCoverModal({
 
   useEffect(() => {
     if (ocrData) {
+      // Auto-calculate totals if debit/credit are provided
+      const debit = ocrData.debit || 0
+      const credit = ocrData.credit || 0
+      
       setFormData({
         ...ocrData,
         coverImageUrl,
+        // Auto-calculate totals if not provided
+        totalDebit: ocrData.totalDebit ?? debit,
+        totalCredit: ocrData.totalCredit ?? credit,
       })
     }
   }, [ocrData, coverImageUrl])
+
+  // Auto-calculate totals when debit/credit change
+  useEffect(() => {
+    if (formData.debit !== undefined || formData.credit !== undefined) {
+      setFormData(prev => ({
+        ...prev,
+        totalDebit: prev.totalDebit ?? (prev.debit || 0),
+        totalCredit: prev.totalCredit ?? (prev.credit || 0),
+      }))
+    }
+  }, [formData.debit, formData.credit])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,9 +89,22 @@ export function DocumentCoverModal({
     return cleaned ? parseFloat(cleaned) : 0
   }
 
+  // Get full image URL
+  const getImageUrl = () => {
+    if (!coverImageUrl) return ''
+    if (coverImageUrl.startsWith('http')) return coverImageUrl
+    // If relative URL, construct full backend URL
+    if (typeof window !== 'undefined') {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
+      const baseUrl = apiBaseUrl.replace('/api', '')
+      return `${baseUrl}${coverImageUrl}`
+    }
+    return coverImageUrl
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>تأیید اطلاعات روکش سند</DialogTitle>
           <DialogDescription>
@@ -81,6 +112,19 @@ export function DocumentCoverModal({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Image Preview */}
+          {coverImageUrl && (
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <Label className="mb-2 block">پیش‌نمایش روکش سند</Label>
+              <div className="relative w-full h-64 bg-white rounded border overflow-hidden">
+                <img
+                  src={getImageUrl()}
+                  alt="روکش سند"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="docNumber">شماره سند</Label>
@@ -177,9 +221,11 @@ export function DocumentCoverModal({
                 id="totalDebit"
                 type="number"
                 value={formatNumber(formData.totalDebit)}
-                onChange={(e) =>
-                  setFormData({ ...formData, totalDebit: parseNumber(e.target.value) })
-                }
+                onChange={(e) => {
+                  const value = parseNumber(e.target.value)
+                  setFormData({ ...formData, totalDebit: value })
+                }}
+                placeholder="خودکار محاسبه می‌شود"
               />
             </div>
             <div className="space-y-2">
@@ -188,9 +234,11 @@ export function DocumentCoverModal({
                 id="totalCredit"
                 type="number"
                 value={formatNumber(formData.totalCredit)}
-                onChange={(e) =>
-                  setFormData({ ...formData, totalCredit: parseNumber(e.target.value) })
-                }
+                onChange={(e) => {
+                  const value = parseNumber(e.target.value)
+                  setFormData({ ...formData, totalCredit: value })
+                }}
+                placeholder="خودکار محاسبه می‌شود"
               />
             </div>
           </div>

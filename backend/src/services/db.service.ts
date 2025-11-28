@@ -99,14 +99,63 @@ export const documentService = {
   },
 
   async findByCompanyId(companyId: string, page: number = 1, limit: number = 20): Promise<{ documents: DocumentCover[], total: number }> {
+    console.log('=== findByCompanyId called ===');
+    console.log('Parameters:', { companyId, page, limit, companyIdType: typeof companyId });
+    
+    if (!companyId) {
+      throw new Error('companyId is required');
+    }
+    
     const offset = (page - 1) * limit;
-    const [rows] = await pool.execute(
-      'SELECT * FROM document_covers WHERE companyId = ? ORDER BY createdAt DESC LIMIT ? OFFSET ?',
-      [companyId, limit, offset]
-    );
-    const [countRows] = await pool.execute('SELECT COUNT(*) as total FROM document_covers WHERE companyId = ?', [companyId]);
-    const total = (countRows as any[])[0].total;
-    return { documents: rows as DocumentCover[], total };
+    
+    // Ensure limit and offset are integers
+    const limitNum = Math.max(1, Math.floor(Number(limit)));
+    const offsetNum = Math.max(0, Math.floor(Number(offset)));
+    
+    console.log('Calculated values:', { limitNum, offsetNum });
+    
+    try {
+      // MySQL2 prepared statements don't work well with LIMIT/OFFSET placeholders
+      // Use pool.query() with proper escaping instead
+      const mysql = require('mysql2/promise');
+      
+      // Escape the limit and offset values to prevent SQL injection
+      const escapedLimit = mysql.escape(limitNum);
+      const escapedOffset = mysql.escape(offsetNum);
+      
+      console.log('Executing SELECT query with params:', [companyId, limitNum, offsetNum]);
+      
+      // Use query() instead of execute() for LIMIT/OFFSET
+      const [rows] = await pool.query(
+        `SELECT * FROM document_covers WHERE companyId = ? ORDER BY createdAt DESC LIMIT ${escapedLimit} OFFSET ${escapedOffset}`,
+        [companyId]
+      ) as any[];
+      
+      console.log('SELECT query successful, rows found:', rows.length);
+      
+      console.log('Executing COUNT query with param:', [companyId]);
+      const [countRows] = await pool.execute(
+        'SELECT COUNT(*) as total FROM document_covers WHERE companyId = ?', 
+        [companyId]
+      ) as any[];
+      
+      console.log('COUNT query result:', countRows);
+      
+      const total = countRows[0]?.total || 0;
+      console.log('Returning result:', { documentsCount: rows.length, total: Number(total) });
+      
+      return { documents: rows as DocumentCover[], total: Number(total) };
+    } catch (error: any) {
+      console.error('=== Database error in findByCompanyId ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+      console.error('Error sqlState:', error.sqlState);
+      console.error('Error sqlMessage:', error.sqlMessage);
+      console.error('Query params:', { companyId, limitNum, offsetNum });
+      console.error('Error stack:', error.stack);
+      throw error;
+    }
   },
 
   async update(id: string, updates: Partial<DocumentCover>): Promise<DocumentCover | null> {

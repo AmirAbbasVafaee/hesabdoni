@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import documentRoutes from './routes/documents';
@@ -28,7 +29,27 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Use the same directory logic as multer
+const getUploadDir = () => {
+  if (process.env.NODE_ENV === 'production' || process.env.UPLOAD_DIR) {
+    return process.env.UPLOAD_DIR || '/tmp/uploads';
+  }
+  return path.join(__dirname, '../uploads');
+};
+
+const uploadDir = getUploadDir();
+console.log(`Serving uploads from: ${uploadDir}`);
+
+// Ensure upload directory exists
+if (!fs.existsSync(uploadDir)) {
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch (error) {
+    console.error('Warning: Could not create upload directory:', error);
+  }
+}
+
+app.use('/uploads', express.static(uploadDir));
 
 // Routes
 app.use('/api/auth', authRoutes);

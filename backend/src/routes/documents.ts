@@ -13,13 +13,39 @@ const router = Router();
 router.use(authenticateToken);
 
 // Configure multer for file uploads
+// Use /tmp/uploads for Liara (writable directory) or ./uploads for local development
+const getUploadDir = () => {
+  // Check if running on Liara or production (has PORT env var and not localhost)
+  if (process.env.NODE_ENV === 'production' || process.env.UPLOAD_DIR) {
+    return process.env.UPLOAD_DIR || '/tmp/uploads';
+  }
+  return './uploads';
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = process.env.UPLOAD_DIR || './uploads';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    const uploadDir = getUploadDir();
+    try {
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    } catch (error: any) {
+      console.error('Error creating upload directory:', error);
+      // Fallback to /tmp if default fails
+      const fallbackDir = '/tmp/uploads';
+      try {
+        if (!fs.existsSync(fallbackDir)) {
+          fs.mkdirSync(fallbackDir, { recursive: true });
+        }
+        cb(null, fallbackDir);
+      } catch (fallbackError: any) {
+        console.error('Error creating fallback upload directory:', fallbackError);
+        // Pass error as first argument, empty string as second (multer callback signature)
+        const uploadError = new Error('خطا در ایجاد پوشه آپلود');
+        (cb as any)(uploadError, '');
+      }
     }
-    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
@@ -38,7 +64,7 @@ const upload = multer({
     if (extname && mimetype) {
       return cb(null, true);
     }
-    cb(new Error('فقط فایل‌های تصویری (JPG, PNG) و PDF مجاز است'));
+    (cb as any)(new Error('فقط فایل‌های تصویری (JPG, PNG) و PDF مجاز است'), false);
   }
 });
 
@@ -50,10 +76,14 @@ router.post('/upload-cover', upload.single('cover'), async (req: AuthRequest, re
     }
 
     const fileUrl = `/uploads/${req.file.filename}`;
+    console.log(`File uploaded successfully: ${req.file.path} -> ${fileUrl}`);
     res.json({ fileUrl, filename: req.file.filename });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Upload cover error:', error);
-    res.status(500).json({ error: 'خطا در آپلود فایل' });
+    res.status(500).json({ 
+      error: 'خطا در آپلود فایل',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -156,18 +186,68 @@ router.post('/:id/upload-file', upload.single('file'), async (req: AuthRequest, 
 // Get documents list
 router.get('/list', async (req: AuthRequest, res: Response) => {
   try {
+    console.log('=== Documents List Request ===');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Query:', req.query);
+    console.log('User info:', { 
+      userId: req.userId, 
+      companyId: req.companyId, 
+      isAdmin: req.isAdmin 
+    });
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
 
-    if (!req.companyId) {
+    // Check authentication
+    if (!req.userId) {
+      console.error('No userId found in request');
       return res.status(401).json({ error: 'احراز هویت نشده است' });
     }
 
-    const result = await documentService.findByCompanyId(req.companyId, page, limit);
-    res.json(result);
-  } catch (error) {
-    console.error('List documents error:', error);
-    res.status(500).json({ error: 'خطا در دریافت لیست اسناد' });
+    // Admin users don't have companyId, so return empty list or handle differently
+    if (req.isAdmin) {
+      console.log('Admin user - returning empty list');
+      return res.json({ documents: [], total: 0 });
+    }
+
+    // Company users must have companyId
+    if (!req.companyId) {
+      console.error('No companyId found for non-admin user');
+      return res.status(401).json({ error: 'شناسه شرکت یافت نشد' });
+    }
+
+    console.log(`Fetching documents for companyId: ${req.companyId}, page: ${page}, limit: ${limit}`);
+    
+    try {
+      const result = await documentService.findByCompanyId(req.companyId, page, limit);
+      console.log(`Successfully found ${result.documents.length} documents, total: ${result.total}`);
+      res.json(result);
+    } catch (dbError: any) {
+      console.error('Database query error:', dbError);
+      console.error('Database error message:', dbError.message);
+      console.error('Database error code:', dbError.code);
+      console.error('Database error sqlState:', dbError.sqlState);
+      console.error('Database error sqlMessage:', dbError.sqlMessage);
+      throw dbError;
+    }
+  } catch (error: any) {
+    console.error('=== List documents error ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request user:', { userId: req.userId, companyId: req.companyId, isAdmin: req.isAdmin });
+    
+    // Return more detailed error in development
+    const errorResponse: any = { 
+      error: 'خطا در دریافت لیست اسناد'
+    };
+    
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production') {
+      errorResponse.details = error.message;
+      errorResponse.stack = error.stack;
+    }
+    
+    res.status(500).json(errorResponse);
   }
 });
 
@@ -244,4 +324,5 @@ router.delete('/:id/files/:fileId', async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+
 
