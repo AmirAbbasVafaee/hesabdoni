@@ -81,6 +81,68 @@ router.get('/company/:id', async (req: Request, res: Response) => {
   }
 });
 
+router.put('/company/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, nationalId, companyType, businessType } = req.body;
+
+    if (!name || !nationalId || !companyType) {
+      return res.status(400).json({ error: 'نام، شناسه ملی و نوع شرکت الزامی است' });
+    }
+
+    // Check if company exists
+    const existing = await companyService.findById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'شرکت یافت نشد' });
+    }
+
+    // Check if nationalId is being changed and if it conflicts with another company
+    if (nationalId !== existing.nationalId) {
+      const conflict = await companyService.findByNationalId(nationalId);
+      if (conflict && conflict.id !== id) {
+        return res.status(400).json({ error: 'شرکتی با این شناسه ملی قبلاً ثبت شده است' });
+      }
+    }
+
+    const updated = await companyService.update(id, {
+      name,
+      nationalId,
+      companyType,
+      businessType: businessType || null,
+    });
+
+    res.json({ company: updated });
+  } catch (error) {
+    console.error('Update company error:', error);
+    res.status(500).json({ error: 'خطا در به‌روزرسانی شرکت' });
+  }
+});
+
+router.post('/company/:id/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if company exists
+    const company = await companyService.findById(id);
+    if (!company) {
+      return res.status(404).json({ error: 'شرکت یافت نشد' });
+    }
+
+    // Generate new password
+    const password = generateRandomPassword();
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await companyService.updatePassword(id, passwordHash);
+
+    res.json({
+      password // Return password for display (in production, send via SMS/email)
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'خطا در بازنشانی رمز عبور' });
+  }
+});
+
 function generateRandomPassword(): string {
   const length = 8;
   const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

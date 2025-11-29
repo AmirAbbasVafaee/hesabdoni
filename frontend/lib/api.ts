@@ -5,6 +5,17 @@ import axios from 'axios';
 // For local development: http://localhost:5001/api
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
+// Get backend base URL (without /api) for file URLs
+export const getBackendBaseUrl = () => {
+  if (typeof window === 'undefined') {
+    // Server-side: use environment variable or default
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+    return apiUrl.replace('/api', '');
+  }
+  // Client-side: get from current API base URL
+  return API_BASE_URL.replace('/api', '');
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {

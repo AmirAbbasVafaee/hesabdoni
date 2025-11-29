@@ -11,8 +11,10 @@ import { Label } from '@/components/ui/label'
 import { UploadArea } from '@/components/UploadArea'
 import { DocumentCoverModal } from '@/components/DocumentCoverModal'
 import { useToast } from '@/components/ui/use-toast'
-import { ArrowRight, Upload, Check } from 'lucide-react'
+import { ArrowRight, Upload, Check, ArrowLeft } from 'lucide-react'
 import api from '@/lib/api'
+import Link from 'next/link'
+import { ProgressModal } from '@/components/ProgressModal'
 
 interface OCRResult {
   docNumber?: string
@@ -33,6 +35,9 @@ export default function NewDocumentPage() {
   const [coverImageUrl, setCoverImageUrl] = useState('')
   const [ocrData, setOcrData] = useState<OCRResult | null>(null)
   const [ocrLoading, setOcrLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showOCRModal, setShowOCRModal] = useState(false)
   const [documentId, setDocumentId] = useState<string | null>(null)
   const [fileTitle, setFileTitle] = useState('')
   const [fileOrder, setFileOrder] = useState(1)
@@ -55,10 +60,24 @@ export default function NewDocumentPage() {
     }
 
     setOcrLoading(true)
+    setUploadProgress(0)
+    setShowUploadModal(true)
+
     try {
-      // Upload file
+      // Upload file with progress simulation
       const formData = new FormData()
       formData.append('cover', selectedFile)
+
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval)
+            return 90
+          }
+          return prev + 10
+        })
+      }, 200)
 
       const uploadResponse = await api.post('/documents/upload-cover', formData, {
         headers: {
@@ -66,12 +85,31 @@ export default function NewDocumentPage() {
         },
       })
 
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+      await new Promise(resolve => setTimeout(resolve, 300))
+
       const fileUrl = uploadResponse.data.fileUrl
       setCoverImageUrl(fileUrl)
+      setShowUploadModal(false)
 
       // Process OCR
+      setShowOCRModal(true)
+      setUploadProgress(0)
+
       const ocrFormData = new FormData()
       ocrFormData.append('image', selectedFile)
+
+      // Simulate OCR progress
+      const ocrProgressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(ocrProgressInterval)
+            return 90
+          }
+          return prev + 15
+        })
+      }, 300)
 
       const ocrResponse = await api.post('/documents/ocr', ocrFormData, {
         headers: {
@@ -79,9 +117,16 @@ export default function NewDocumentPage() {
         },
       })
 
+      clearInterval(ocrProgressInterval)
+      setUploadProgress(100)
+      await new Promise(resolve => setTimeout(resolve, 300))
+
       setOcrData(ocrResponse.data.data)
+      setShowOCRModal(false)
       setStep(2)
     } catch (error: any) {
+      setShowUploadModal(false)
+      setShowOCRModal(false)
       toast({
         title: 'خطا',
         description: error.response?.data?.error || 'خطا در آپلود یا پردازش OCR',
@@ -89,6 +134,7 @@ export default function NewDocumentPage() {
       })
     } finally {
       setOcrLoading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -100,6 +146,7 @@ export default function NewDocumentPage() {
       toast({
         title: 'موفق',
         description: 'روکش سند با موفقیت ثبت شد',
+        variant: 'success',
       })
     } catch (error: any) {
       toast({
@@ -136,6 +183,7 @@ export default function NewDocumentPage() {
       toast({
         title: 'موفق',
         description: 'فایل با موفقیت آپلود شد',
+        variant: 'success',
       })
 
       setFileTitle('')
@@ -157,7 +205,29 @@ export default function NewDocumentPage() {
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-6">افزودن سند جدید</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <Link href="/documents">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="ml-2 h-4 w-4" />
+            بازگشت
+          </Button>
+        </Link>
+        <h1 className="text-3xl font-bold">افزودن سند جدید</h1>
+      </div>
+
+      {/* Progress Modals */}
+      <ProgressModal
+        open={showUploadModal}
+        type="upload"
+        progress={uploadProgress}
+        message={uploadProgress < 100 ? 'در حال آپلود فایل...' : 'آپلود با موفقیت انجام شد'}
+      />
+      <ProgressModal
+        open={showOCRModal}
+        type="ocr"
+        progress={uploadProgress}
+        message={uploadProgress < 100 ? 'در حال استخراج اطلاعات از تصویر...' : 'پردازش OCR با موفقیت انجام شد'}
+      />
 
       {/* Step 1: Upload Cover */}
       {step === 1 && (

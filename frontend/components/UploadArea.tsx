@@ -32,30 +32,7 @@ export function UploadArea({
     setIsDragging(false)
   }, [])
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setIsDragging(false)
-
-      const file = e.dataTransfer.files[0]
-      if (file) {
-        validateAndSetFile(file)
-      }
-    },
-    []
-  )
-
-  const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (file) {
-        validateAndSetFile(file)
-      }
-    },
-    []
-  )
-
-  const validateAndSetFile = (file: File) => {
+  const validateAndSetFile = useCallback((file: File) => {
     setError(null)
 
     if (file.size > maxSize) {
@@ -80,7 +57,30 @@ export function UploadArea({
 
     setSelectedFile(file)
     onFileSelect(file)
-  }
+  }, [maxSize, accept, onFileSelect])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
+
+      const file = e.dataTransfer.files[0]
+      if (file) {
+        validateAndSetFile(file)
+      }
+    },
+    [validateAndSetFile]
+  )
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) {
+        validateAndSetFile(file)
+      }
+    },
+    [validateAndSetFile]
+  )
 
   const removeFile = () => {
     setSelectedFile(null)

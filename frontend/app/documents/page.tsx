@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,16 +31,7 @@ export default function DocumentsPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
-    }
-    fetchDocuments()
-  }, [])
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
       const response = await api.get('/documents/list?limit=100')
       setDocuments(response.data.documents || [])
@@ -53,7 +44,16 @@ export default function DocumentsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+    fetchDocuments()
+  }, [fetchDocuments, router])
 
   const filteredDocuments = documents.filter((doc) => {
     if (!searchTerm) return true

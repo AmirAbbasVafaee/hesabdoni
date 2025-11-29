@@ -35,6 +35,7 @@ export default function LoginPage() {
         toast({
           title: 'ورود موفق',
           description: 'با موفقیت وارد پنل مدیریت شدید',
+          variant: 'success',
         })
         router.push('/admin/companies')
       } else {
@@ -42,6 +43,7 @@ export default function LoginPage() {
         toast({
           title: 'ورود موفق',
           description: 'با موفقیت وارد شدید',
+          variant: 'success',
         })
         router.push('/dashboard')
       }

@@ -72,6 +72,20 @@ export const companyService = {
   async findById(id: string): Promise<Company | null> {
     const [rows] = await pool.execute('SELECT id, name, nationalId, companyType, businessType, username, createdAt, updatedAt FROM companies WHERE id = ?', [id]);
     return (rows as Company[])[0] || null;
+  },
+
+  async update(id: string, updates: Partial<Omit<Company, 'id' | 'createdAt' | 'updatedAt' | 'passwordHash'>>): Promise<Company | null> {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    if (fields) {
+      await pool.execute(`UPDATE companies SET ${fields} WHERE id = ?`, [...values, id]);
+    }
+    return this.findById(id);
+  },
+
+  async updatePassword(id: string, passwordHash: string): Promise<Company | null> {
+    await pool.execute('UPDATE companies SET passwordHash = ? WHERE id = ?', [passwordHash, id]);
+    return this.findById(id);
   }
 };
 

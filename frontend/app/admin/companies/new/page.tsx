@@ -20,13 +20,47 @@ export default function NewCompanyPage() {
     companyType: '',
     businessType: '',
   })
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [createdCompany, setCreatedCompany] = useState<any>(null)
   const router = useRouter()
   const { toast } = useToast()
 
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'نام شرکت الزامی است'
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = 'نام شرکت باید حداقل 2 کاراکتر باشد'
+    }
+
+    if (!formData.nationalId.trim()) {
+      newErrors.nationalId = 'شناسه ملی الزامی است'
+    } else if (!/^\d{10,11}$/.test(formData.nationalId.trim())) {
+      newErrors.nationalId = 'شناسه ملی باید 10 یا 11 رقم باشد'
+    }
+
+    if (!formData.companyType) {
+      newErrors.companyType = 'نوع شرکت الزامی است'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      toast({
+        title: 'خطا در اعتبارسنجی',
+        description: 'لطفاً تمام فیلدهای الزامی را به درستی پر کنید',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -38,6 +72,7 @@ export default function NewCompanyPage() {
       toast({
         title: 'موفق',
         description: 'شرکت با موفقیت ایجاد شد',
+        variant: 'success',
       })
     } catch (error: any) {
       toast({
@@ -48,6 +83,10 @@ export default function NewCompanyPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCancel = () => {
+    router.push('/admin/companies')
   }
 
   if (createdCompany) {
@@ -86,42 +125,103 @@ export default function NewCompanyPage() {
           <CardDescription>اطلاعات شرکت را وارد کنید</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div className="space-y-2">
               <Label htmlFor="name">نام شرکت *</Label>
               <Input
                 id="name"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
+                onChange={(e) => {
+                  setFormData({ ...formData, name: e.target.value })
+                  if (errors.name) {
+                    setErrors({ ...errors, name: '' })
+                  }
+                }}
+                onBlur={() => {
+                  if (!formData.name.trim()) {
+                    setErrors({ ...errors, name: 'نام شرکت الزامی است' })
+                  } else if (formData.name.trim().length < 2) {
+                    setErrors({ ...errors, name: 'نام شرکت باید حداقل 2 کاراکتر باشد' })
+                  } else {
+                    setErrors({ ...errors, name: '' })
+                  }
+                }}
+                className={errors.name ? 'border-destructive' : ''}
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? 'name-error' : undefined}
               />
+              {errors.name && (
+                <p id="name-error" className="text-sm text-destructive" role="alert">
+                  {errors.name}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="nationalId">شناسه ملی *</Label>
               <Input
                 id="nationalId"
+                type="text"
+                inputMode="numeric"
                 value={formData.nationalId}
-                onChange={(e) => setFormData({ ...formData, nationalId: e.target.value })}
-                required
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '')
+                  setFormData({ ...formData, nationalId: value })
+                  if (errors.nationalId) {
+                    setErrors({ ...errors, nationalId: '' })
+                  }
+                }}
+                onBlur={() => {
+                  if (!formData.nationalId.trim()) {
+                    setErrors({ ...errors, nationalId: 'شناسه ملی الزامی است' })
+                  } else if (!/^\d{10,11}$/.test(formData.nationalId.trim())) {
+                    setErrors({ ...errors, nationalId: 'شناسه ملی باید 10 یا 11 رقم باشد' })
+                  } else {
+                    setErrors({ ...errors, nationalId: '' })
+                  }
+                }}
+                className={errors.nationalId ? 'border-destructive' : ''}
+                aria-invalid={!!errors.nationalId}
+                aria-describedby={errors.nationalId ? 'nationalId-error' : undefined}
+                maxLength={11}
               />
+              {errors.nationalId && (
+                <p id="nationalId-error" className="text-sm text-destructive" role="alert">
+                  {errors.nationalId}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="companyType">نوع شرکت *</Label>
               <Select
                 value={formData.companyType}
-                onValueChange={(value) => setFormData({ ...formData, companyType: value })}
-                required
+                onValueChange={(value) => {
+                  setFormData({ ...formData, companyType: value })
+                  if (errors.companyType) {
+                    setErrors({ ...errors, companyType: '' })
+                  }
+                }}
               >
-                <SelectTrigger>
+                <SelectTrigger 
+                  id="companyType"
+                  dir="rtl"
+                  className={`text-right ${errors.companyType ? 'border-destructive' : ''}`}
+                  aria-invalid={!!errors.companyType}
+                  aria-describedby={errors.companyType ? 'companyType-error' : undefined}
+                >
                   <SelectValue placeholder="انتخاب نوع شرکت" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent dir="rtl">
                   <SelectItem value="سهامی خاص">سهامی خاص</SelectItem>
                   <SelectItem value="سهامی عام">سهامی عام</SelectItem>
                   <SelectItem value="مسئولیت محدود">مسئولیت محدود</SelectItem>
                   <SelectItem value="تضامنی">تضامنی</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.companyType && (
+                <p id="companyType-error" className="text-sm text-destructive" role="alert">
+                  {errors.companyType}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="businessType">نوع فعالیت</Label>
@@ -131,10 +231,21 @@ export default function NewCompanyPage() {
                 onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'در حال ایجاد...' : 'ایجاد شرکت'}
-              <ArrowRight className="mr-2 h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1" disabled={loading}>
+                {loading ? 'در حال ایجاد...' : 'ایجاد شرکت'}
+                <ArrowRight className="mr-2 h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={handleCancel}
+                disabled={loading}
+              >
+                انصراف
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

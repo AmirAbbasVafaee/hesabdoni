@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { getBackendBaseUrl } from '@/lib/api'
+import { JalaliDateInput } from '@/components/JalaliDateInput'
 
 interface OCRResult {
   docNumber?: string
@@ -94,16 +97,11 @@ export function DocumentCoverModal({
     if (!coverImageUrl) return ''
     if (coverImageUrl.startsWith('http')) return coverImageUrl
     // If relative URL, construct full backend URL
-    if (typeof window !== 'undefined') {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
-      const baseUrl = apiBaseUrl.replace('/api', '')
-      return `${baseUrl}${coverImageUrl}`
-    }
-    return coverImageUrl
+    return `${getBackendBaseUrl()}${coverImageUrl}`
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>تأیید اطلاعات روکش سند</DialogTitle>
@@ -117,10 +115,12 @@ export function DocumentCoverModal({
             <div className="border rounded-lg p-4 bg-gray-50">
               <Label className="mb-2 block">پیش‌نمایش روکش سند</Label>
               <div className="relative w-full h-64 bg-white rounded border overflow-hidden">
-                <img
+                <Image
                   src={getImageUrl()}
                   alt="روکش سند"
-                  className="w-full h-full object-contain"
+                  fill
+                  className="object-contain"
+                  unoptimized
                 />
               </div>
             </div>
@@ -136,17 +136,15 @@ export function DocumentCoverModal({
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="docDate">تاریخ سند</Label>
-              <Input
-                id="docDate"
-                type="date"
-                value={formData.docDate || ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, docDate: e.target.value })
-                }
-              />
-            </div>
+            <JalaliDateInput
+              id="docDate"
+              label="تاریخ سند"
+              value={formData.docDate || ''}
+              onChange={(value) =>
+                setFormData({ ...formData, docDate: value })
+              }
+              className="space-y-2"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="description">شرح سند</Label>
@@ -243,15 +241,15 @@ export function DocumentCoverModal({
             </div>
           </div>
           <DialogFooter>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'در حال ذخیره...' : 'تأیید و ادامه'}
+            </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
             >
               انصراف
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'در حال ذخیره...' : 'تأیید و ادامه'}
             </Button>
           </DialogFooter>
         </form>
