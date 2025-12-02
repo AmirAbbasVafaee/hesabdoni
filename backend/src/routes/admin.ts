@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth.middleware';
-import { companyService } from '../services/db.service';
+import { companyService, companyDocumentTypeService } from '../services/db.service';
 
 const router = Router();
 
@@ -37,6 +37,14 @@ router.post('/company/create', async (req: Request, res: Response) => {
       username,
       passwordHash
     });
+
+    // Initialize default document types for the company
+    try {
+      await companyDocumentTypeService.initializeDefaults(company.id);
+    } catch (error) {
+      console.error('Error initializing default document types:', error);
+      // Don't fail company creation if document types initialization fails
+    }
 
     res.status(201).json({
       company: {

@@ -16,6 +16,21 @@ import api from '@/lib/api'
 import Link from 'next/link'
 import { ProgressModal } from '@/components/ProgressModal'
 
+interface OCRTableRow {
+  rowNumber?: string
+  kolCode?: string
+  kolDescription?: string
+  moeenCode?: string
+  moeenDescription?: string
+  tafziliCode?: string
+  tafziliDescription?: string
+  tafziliDetails?: string
+  partialAmount?: number
+  debit?: number
+  credit?: number
+  order?: number
+}
+
 interface OCRResult {
   docNumber?: string
   docDate?: string
@@ -27,6 +42,7 @@ interface OCRResult {
   credit?: number
   totalDebit?: number
   totalCredit?: number
+  tableRows?: OCRTableRow[]
 }
 
 export default function NewDocumentPage() {
@@ -121,7 +137,15 @@ export default function NewDocumentPage() {
       setUploadProgress(100)
       await new Promise(resolve => setTimeout(resolve, 300))
 
-      setOcrData(ocrResponse.data.data)
+      // Debug: Log OCR response
+      console.log('OCR Response:', ocrResponse)
+      console.log('OCR Response Data:', ocrResponse.data)
+      console.log('OCR Result:', ocrResponse.data?.data)
+      
+      const ocrResult = ocrResponse.data?.data || ocrResponse.data
+      console.log('Setting OCR Data:', ocrResult)
+      
+      setOcrData(ocrResult)
       setShowOCRModal(false)
       setStep(2)
     } catch (error: any) {
@@ -138,9 +162,43 @@ export default function NewDocumentPage() {
     }
   }
 
-  const handleConfirmCover = async (data: OCRResult & { coverImageUrl: string }) => {
+  const handleConfirmCover = async (data: OCRResult & { coverImageUrl: string; tableRows?: OCRTableRow[] }) => {
     try {
-      const response = await api.post('/documents/confirm-cover', data)
+      // Filter out invalid table rows before sending
+      const validTableRows = data.tableRows?.filter(row => {
+        // Must have at least one meaningful field
+        const hasAccountCode = !!(row.kolCode || row.moeenCode || row.tafziliCode);
+        const hasAmount = !!(row.debit || row.credit || row.partialAmount);
+        const hasDescription = !!(row.tafziliDetails && row.tafziliDetails.trim().length > 3) ||
+                               !!(row.kolDescription && row.kolDescription.trim().length > 3) ||
+                               !!(row.moeenDescription && row.moeenDescription.trim().length > 3) ||
+                               !!(row.tafziliDescription && row.tafziliDescription.trim().length > 3);
+        
+        // Filter out rows with tiny amounts (likely noise)
+        if (hasAmount) {
+          const totalAmount = (row.debit || 0) + (row.credit || 0) + (row.partialAmount || 0);
+          if (totalAmount > 0 && totalAmount < 1000 && !hasAccountCode && !hasDescription) {
+            return false; // Too small and no other meaningful data
+          }
+        }
+        
+        // Must have at least account code, meaningful amount, or description
+        return hasAccountCode || hasAmount || hasDescription;
+      }) || [];
+
+      console.log('Sending to backend:', {
+        ...data,
+        tableRows: validTableRows,
+        tableRowsCount: validTableRows.length
+      });
+
+      const response = await api.post('/documents/confirm-cover', {
+        ...data,
+        tableRows: validTableRows
+      })
+      
+      console.log('Backend response:', response.data);
+      
       setDocumentId(response.data.document.id)
       setStep(3)
       toast({
@@ -149,6 +207,8 @@ export default function NewDocumentPage() {
         variant: 'success',
       })
     } catch (error: any) {
+      console.error('Error confirming cover:', error);
+      console.error('Error response:', error.response?.data);
       toast({
         title: 'خطا',
         description: error.response?.data?.error || 'خطا در ثبت سند',

@@ -6,12 +6,13 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { FileText, Plus, LogOut, FolderOpen } from 'lucide-react'
+import { FileText, Plus, LogOut, FolderOpen, Building2, Edit } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({ total: 0, pending: 0, completed: 0 })
+  const [companyInfoProgress, setCompanyInfoProgress] = useState({ completed: 0, total: 0, percentage: 0 })
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
@@ -31,6 +32,15 @@ export default function DashboardPage() {
     }
   }, [])
 
+  const fetchCompanyInfoProgress = useCallback(async () => {
+    try {
+      const response = await api.get('/company-documents/progress')
+      setCompanyInfoProgress(response.data)
+    } catch (error) {
+      console.error('Error fetching company info progress:', error)
+    }
+  }, [])
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) {
@@ -38,7 +48,8 @@ export default function DashboardPage() {
       return
     }
     fetchStats()
-  }, [fetchStats, router])
+    fetchCompanyInfoProgress()
+  }, [fetchStats, fetchCompanyInfoProgress, router])
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -86,7 +97,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 mb-6">
         <Card>
           <CardHeader>
             <CardTitle>عملیات سریع</CardTitle>
@@ -103,6 +114,57 @@ export default function DashboardPage() {
               <Button variant="outline" className="w-full justify-start">
                 <FolderOpen className="ml-2 h-4 w-4" />
                 مشاهده تمام اسناد
+              </Button>
+            </Link>
+            <Link href="/contracts">
+              <Button variant="outline" className="w-full justify-start">
+                <FileText className="ml-2 h-4 w-4" />
+                بایگانی قراردادها
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              تکمیل اطلاعات عمومی شرکت
+            </CardTitle>
+            <CardDescription>پیشرفت تکمیل پروفایل</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">پیشرفت تکمیل پروفایل</span>
+                <span className="font-semibold text-teal-600">{companyInfoProgress.percentage}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div
+                  className="h-2.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${companyInfoProgress.percentage}%`,
+                    background: 'linear-gradient(to right, #14b8a6, #84cc16)'
+                  }}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {companyInfoProgress.completed} از {companyInfoProgress.total} فرم تکمیل شده
+              </p>
+            </div>
+            <Link href="/company-info" className="block">
+              <Button className="w-full" variant={companyInfoProgress.percentage === 100 ? "outline" : "default"}>
+                {companyInfoProgress.percentage === 100 ? (
+                  <>
+                    <Edit className="ml-2 h-4 w-4" />
+                    ویرایش اطلاعات
+                  </>
+                ) : (
+                  <>
+                    <Plus className="ml-2 h-4 w-4" />
+                    تکمیل اطلاعات
+                  </>
+                )}
               </Button>
             </Link>
           </CardContent>

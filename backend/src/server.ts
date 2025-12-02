@@ -6,6 +6,8 @@ import fs from 'fs';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import documentRoutes from './routes/documents';
+import companyDocumentsRoutes from './routes/company-documents';
+import contractsRoutes from './routes/contracts';
 
 dotenv.config();
 
@@ -55,6 +57,8 @@ app.use('/uploads', express.static(uploadDir));
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/company-documents', companyDocumentsRoutes);
+app.use('/api/contracts', contractsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

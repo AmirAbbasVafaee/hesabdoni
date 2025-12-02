@@ -4,8 +4,8 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticateToken, AuthRequest } from '../middleware/auth.middleware';
-import { documentService } from '../services/db.service';
-import { processOCR } from '../services/ocr.service';
+import { documentService, ocrRowService } from '../services/db.service';
+import { processOCR, OCRTableRow, OCRResult } from '../services/ocr.service';
 
 const router = Router();
 
@@ -23,7 +23,7 @@ const getUploadDir = () => {
 };
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (req: any, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     const uploadDir = getUploadDir();
     try {
       if (!fs.existsSync(uploadDir)) {
@@ -47,7 +47,7 @@ const storage = multer.diskStorage({
       }
     }
   },
-  filename: (req, file, cb) => {
+  filename: (req: any, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
     cb(null, uniqueName);
   }
@@ -56,7 +56,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760') },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
@@ -95,7 +95,20 @@ router.post('/ocr', upload.single('image'), async (req: AuthRequest, res: Respon
     }
 
     const imagePath = req.file.path;
+    console.log('Processing OCR for image:', imagePath);
     const ocrResult = await processOCR(imagePath);
+    
+    // Log OCR result for debugging
+    console.log('OCR Result:', JSON.stringify(ocrResult, null, 2));
+    console.log('OCR Result keys:', Object.keys(ocrResult));
+    console.log('OCR Result has data:', {
+      docNumber: !!ocrResult.docNumber,
+      docDate: !!ocrResult.docDate,
+      description: !!ocrResult.description,
+      totalDebit: !!ocrResult.totalDebit,
+      totalCredit: !!ocrResult.totalCredit,
+      tableRows: ocrResult.tableRows?.length || 0,
+    });
 
     res.json({ data: ocrResult });
   } catch (error) {
@@ -118,14 +131,30 @@ router.post('/confirm-cover', async (req: AuthRequest, res: Response) => {
       credit,
       totalDebit,
       totalCredit,
-      coverImageUrl
+      coverImageUrl,
+      tableRows
     } = req.body;
 
     if (!req.companyId) {
       return res.status(401).json({ error: 'احراز هویت نشده است' });
     }
 
-    const document = await documentService.create({
+    // Log received data for debugging
+    console.log('=== Confirm Cover - Received Data ===');
+    console.log('docNumber:', docNumber);
+    console.log('docDate:', docDate);
+    console.log('description:', description);
+    console.log('kolCode:', kolCode);
+    console.log('moeenCode:', moeenCode);
+    console.log('tafziliCode:', tafziliCode);
+    console.log('debit:', debit);
+    console.log('credit:', credit);
+    console.log('totalDebit:', totalDebit);
+    console.log('totalCredit:', totalCredit);
+    console.log('coverImageUrl:', coverImageUrl);
+    console.log('tableRows count:', tableRows?.length || 0);
+
+    const documentData = {
       companyId: req.companyId,
       docNumber: docNumber || null,
       docDate: docDate || null,
@@ -137,10 +166,67 @@ router.post('/confirm-cover', async (req: AuthRequest, res: Response) => {
       credit: parseFloat(credit) || 0,
       totalDebit: parseFloat(totalDebit) || 0,
       totalCredit: parseFloat(totalCredit) || 0,
-      status: 'pending',
+      status: 'pending' as const,
       coverImageUrl: coverImageUrl || null
-    });
+    };
 
+    console.log('=== Saving Document to Database ===');
+    console.log('Document Data:', JSON.stringify(documentData, null, 2));
+
+    const document = await documentService.create(documentData);
+    
+    console.log('Document created with ID:', document.id);
+
+    // Save OCR table rows if provided
+    if (tableRows && Array.isArray(tableRows) && tableRows.length > 0) {
+      console.log(`Saving ${tableRows.length} table rows to database`);
+      
+      const ocrRowsToSave = tableRows.map((row: OCRTableRow, index: number) => {
+        // ترکیب توضیحات مختلف در یک فیلد description
+        const descriptions: string[] = [];
+        if (row.kolDescription) descriptions.push(`کل: ${row.kolDescription}`);
+        if (row.moeenDescription) descriptions.push(`معین: ${row.moeenDescription}`);
+        if (row.tafziliDescription) descriptions.push(`تفصیل: ${row.tafziliDescription}`);
+        if (row.tafziliDetails) descriptions.push(row.tafziliDetails);
+        
+        return {
+          documentId: document.id,
+          rowNumber: row.rowNumber || null,
+          kolCode: row.kolCode || null,
+          moeenCode: row.moeenCode || null,
+          tafziliCode: row.tafziliCode || null,
+          description: descriptions.join(' | ') || null,
+          partialAmount: row.partialAmount || 0,
+          debit: row.debit || 0,
+          credit: row.credit || 0,
+          parentRowId: null,
+          order: row.order !== undefined ? row.order : index
+        };
+      });
+
+      console.log('OCR Rows to Save:', JSON.stringify(ocrRowsToSave.slice(0, 3), null, 2), '... (showing first 3)');
+
+      // Create all rows first
+      const createdRows = await ocrRowService.createBatch(ocrRowsToSave);
+      console.log(`Successfully saved ${createdRows.length} OCR rows`);
+
+      // Update parent-child relationships in a second pass
+      for (let i = 0; i < tableRows.length; i++) {
+        const row = tableRows[i];
+        if (row.isSubRow && row.parentRowIndex !== undefined && row.parentRowIndex >= 0 && row.parentRowIndex < createdRows.length) {
+          const parentRow = createdRows[row.parentRowIndex];
+          if (parentRow && createdRows[i]) {
+            // Update the child row with parent ID
+            await ocrRowService.update(createdRows[i].id, { parentRowId: parentRow.id });
+            console.log(`Updated parent-child relationship: row ${i} -> parent ${row.parentRowIndex}`);
+          }
+        }
+      }
+    } else {
+      console.log('No table rows to save');
+    }
+
+    console.log('=== Document Creation Complete ===');
     res.status(201).json({ document });
   } catch (error) {
     console.error('Create document error:', error);
@@ -266,11 +352,35 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     const files = await documentService.getFiles(id);
+    const ocrRows = await ocrRowService.findByDocumentId(id);
 
-    res.json({ document, files });
+    res.json({ document, files, ocrRows });
   } catch (error) {
     console.error('Get document error:', error);
     res.status(500).json({ error: 'خطا در دریافت اطلاعات سند' });
+  }
+});
+
+// Get OCR rows for a document
+router.get('/:id/ocr-rows', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const document = await documentService.findById(id);
+    if (!document) {
+      return res.status(404).json({ error: 'سند یافت نشد' });
+    }
+
+    if (document.companyId !== req.companyId) {
+      return res.status(403).json({ error: 'دسترسی غیرمجاز' });
+    }
+
+    const ocrRows = await ocrRowService.findByDocumentId(id);
+
+    res.json({ ocrRows });
+  } catch (error) {
+    console.error('Get OCR rows error:', error);
+    res.status(500).json({ error: 'خطا در دریافت اطلاعات جدول OCR' });
   }
 });
 

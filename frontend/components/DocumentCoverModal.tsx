@@ -16,6 +16,21 @@ import { Label } from '@/components/ui/label'
 import { getBackendBaseUrl } from '@/lib/api'
 import { JalaliDateInput } from '@/components/JalaliDateInput'
 
+interface OCRTableRow {
+  rowNumber?: string
+  kolCode?: string
+  kolDescription?: string
+  moeenCode?: string
+  moeenDescription?: string
+  tafziliCode?: string
+  tafziliDescription?: string
+  tafziliDetails?: string
+  partialAmount?: number
+  debit?: number
+  credit?: number
+  order?: number
+}
+
 interface OCRResult {
   docNumber?: string
   docDate?: string
@@ -27,13 +42,14 @@ interface OCRResult {
   credit?: number
   totalDebit?: number
   totalCredit?: number
+  tableRows?: OCRTableRow[]
 }
 
 interface DocumentCoverModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ocrData: OCRResult | null
-  onConfirm: (data: OCRResult & { coverImageUrl: string }) => void
+  onConfirm: (data: OCRResult & { coverImageUrl: string; tableRows?: OCRTableRow[] }) => void
   coverImageUrl: string
   loading?: boolean
 }
@@ -46,22 +62,49 @@ export function DocumentCoverModal({
   coverImageUrl,
   loading = false,
 }: DocumentCoverModalProps) {
-  const [formData, setFormData] = useState<OCRResult & { coverImageUrl: string }>({
+  const [formData, setFormData] = useState<OCRResult & { coverImageUrl: string; tableRows?: OCRTableRow[] }>({
     coverImageUrl: '',
   })
 
   useEffect(() => {
+    console.log('DocumentCoverModal: ocrData changed', ocrData)
     if (ocrData) {
       // Auto-calculate totals if debit/credit are provided
       const debit = ocrData.debit || 0
       const credit = ocrData.credit || 0
       
-      setFormData({
-        ...ocrData,
-        coverImageUrl,
-        // Auto-calculate totals if not provided
+      const newFormData = {
+        docNumber: ocrData.docNumber || '',
+        docDate: ocrData.docDate || '',
+        description: ocrData.description || '',
+        kolCode: ocrData.kolCode || '',
+        moeenCode: ocrData.moeenCode || '',
+        tafziliCode: ocrData.tafziliCode || '',
+        debit: ocrData.debit || 0,
+        credit: ocrData.credit || 0,
         totalDebit: ocrData.totalDebit ?? debit,
         totalCredit: ocrData.totalCredit ?? credit,
+        coverImageUrl,
+        tableRows: ocrData.tableRows || [], // Include table rows
+      }
+      
+      console.log('DocumentCoverModal: Setting formData', newFormData)
+      setFormData(newFormData)
+    } else {
+      console.log('DocumentCoverModal: ocrData is null/undefined')
+      // Reset form when ocrData is cleared
+      setFormData({
+        coverImageUrl,
+        docNumber: '',
+        docDate: '',
+        description: '',
+        kolCode: '',
+        moeenCode: '',
+        tafziliCode: '',
+        debit: 0,
+        credit: 0,
+        totalDebit: 0,
+        totalCredit: 0,
       })
     }
   }, [ocrData, coverImageUrl])
